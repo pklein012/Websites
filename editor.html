@@ -76,6 +76,14 @@
           <div class="fi"><label>Death year</label><input id="f_d" type="text"></div>
         </div>
         <div class="fi"><label>Generation (0 = oldest)</label><input id="f_gen" type="number" min="0" max="12"></div>
+        <div class="fi">
+          <label>Custom colour</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="f_color" type="color" style="width:48px;height:36px;padding:2px;border:1px solid var(--border);border-radius:7px;background:var(--bg);cursor:pointer;">
+            <button type="button" onclick="clearColor()" style="font-size:12px;padding:6px 10px;">✕ Reset to generation colour</button>
+          </div>
+          <div class="hint" id="colorHint"></div>
+        </div>
 
         <div class="fi"><label>Spouse / partner</label>
           <select id="f_spouse"><option value="">— none —</option></select>
@@ -152,6 +160,15 @@ function select(id){
   refreshSelects();
   document.getElementById('f_spouse').value=partnerOf(id)||'';
   document.getElementById('f_parent').value=parentOf(id)||'';
+  const colorInput=document.getElementById('f_color');
+  const hint=document.getElementById('colorHint');
+  if(p.color){colorInput.value=p.color;colorInput.dataset.custom='true';hint.textContent='Custom colour: '+p.color;}
+  else{colorInput.value='#888888';colorInput.dataset.custom='false';hint.textContent='Using generation colour (no custom colour set).';}
+}
+function clearColor(){
+  const ci=document.getElementById('f_color');
+  ci.value='#888888';ci.dataset.custom='false';
+  document.getElementById('colorHint').textContent='Using generation colour (no custom colour set).';
 }
 function newPerson(){
   const id=Math.max(0,...DATA.people.map(p=>p.id))+1;
@@ -168,6 +185,9 @@ function saveForm(){
   p.b=document.getElementById('f_b').value.trim();
   p.d=document.getElementById('f_d').value.trim();
   p.gen=parseInt(document.getElementById('f_gen').value)||0;
+  // Color: only store if user explicitly chose one (flagged by data-custom attr)
+  const ci=document.getElementById('f_color');
+  if(ci.dataset.custom==='true'){p.color=ci.value;}else{delete p.color;}
 
   // Spouse
   const newSpouse=document.getElementById('f_spouse').value?parseInt(document.getElementById('f_spouse').value):null;
@@ -215,6 +235,10 @@ async function loadFromFile(){
   try{const res=await fetch('family.json?t='+Date.now());DATA=await res.json();renderList();toast('Loaded family.json');}
   catch(e){toast('Could not load family.json');}
 }
+document.getElementById('f_color').addEventListener('input',e=>{
+  e.target.dataset.custom='true';
+  document.getElementById('colorHint').textContent='Custom colour: '+e.target.value;
+});
 document.getElementById('importFile').addEventListener('change',e=>{
   const f=e.target.files[0];if(!f)return;
   const r=new FileReader();r.onload=()=>{try{DATA=JSON.parse(r.result);renderList();toast('Imported');}catch(err){alert('Invalid JSON');}};r.readAsText(f);
