@@ -3,16 +3,281 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>pklein012</title>
+<title>Family Tree</title>
 <style>
-  body { font-family: sans-serif; max-width: 600px; margin: 80px auto; padding: 2rem; }
-  h1 { margin-bottom: 1.5rem; }
-  a { display: block; margin: 1rem 0; font-size: 1.1rem; }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --bg:#f9f7f4;--bg2:#f0ede8;--border:#ddd9d0;--text:#2c2a27;--text2:#6b6860;--accent:#5c3d1e;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#1a1917;--bg2:#252320;--border:#3a3830;--text:#e8e4dc;--text2:#a09c94;--accent:#d4945a;}
+  }
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh;}
+  header{background:var(--bg2);border-bottom:1px solid var(--border);padding:1.25rem 2rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;}
+  header h1{font-size:1.3rem;font-weight:600;color:var(--accent);}
+  header p{font-size:0.8rem;color:var(--text2);margin-top:2px;}
+  .topbtns{display:flex;gap:8px;}
+  .topbtns a{text-decoration:none;}
+  button,.btn{padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer;font-weight:500;}
+  button:hover,.btn:hover{background:var(--border);}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:0.75rem 2rem;background:var(--bg2);border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);}
+  .legend span{display:flex;align-items:center;gap:5px;}
+  .ld{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  .wrap{overflow:auto;padding:1.5rem;cursor:grab;}
+  .wrap:active{cursor:grabbing;}
+  svg{display:block;}
+  .pc{cursor:pointer;}
+  .pc rect{transition:filter .12s;}
+  .pc:hover rect{filter:brightness(0.93);}
+  .msg{padding:3rem;text-align:center;color:var(--text2);}
+  footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--text2);border-top:1px solid var(--border);margin-top:1rem;}
 </style>
 </head>
 <body>
-  <h1>My Pages</h1>
-  <a href="GTO.html">🚗 GTO Listing</a>
-  <a href="Family_Tree.html">🌳 Family Tree</a>
+<header>
+  <div>
+    <h1 id="title">Family Tree</h1>
+    <p id="subtitle"></p>
+  </div>
+  <div class="topbtns">
+    <a href="editor.html" class="btn">✎ Edit tree</a>
+  </div>
+</header>
+
+<div class="legend">
+  <span><span class="ld" style="background:#7DC87D"></span>Gen 1</span>
+  <span><span class="ld" style="background:#C99EE0"></span>Gen 2</span>
+  <span><span class="ld" style="background:#EF9F27"></span>Gen 3</span>
+  <span><span class="ld" style="background:#5DCAA5"></span>Gen 4</span>
+  <span><span class="ld" style="background:#85B7EB"></span>Gen 5</span>
+  <span><span class="ld" style="background:#AFA9EC"></span>Gen 6</span>
+  <span><span class="ld" style="background:#F0997B"></span>Gen 7</span>
+  <span><span class="ld" style="background:#97C459"></span>Gen 8</span>
+</div>
+
+<div class="wrap" id="wrap">
+  <div class="msg" id="msg">Loading family data…</div>
+  <svg id="svg" xmlns="http://www.w3.org/2000/svg" style="display:none;"><g id="LL"></g><g id="CL"></g></svg>
+</div>
+
+<footer id="footer"></footer>
+
+<script>
+// Generation color palette (index by gen number)
+const GEN_COLORS_LIGHT=[
+  {fill:'#D8EDD8',stroke:'#2E6B2E',text:'#1A4A1A'},
+  {fill:'#EDE0F5',stroke:'#7B3FA0',text:'#4B1A6E'},
+  {fill:'#FAEEDA',stroke:'#854F0B',text:'#633806'},
+  {fill:'#E1F5EE',stroke:'#0F6E56',text:'#085041'},
+  {fill:'#E6F1FB',stroke:'#185FA5',text:'#0C447C'},
+  {fill:'#EEEDFE',stroke:'#534AB7',text:'#3C3489'},
+  {fill:'#FAECE7',stroke:'#993C1D',text:'#712B13'},
+  {fill:'#EAF3DE',stroke:'#3B6D11',text:'#27500A'},
+];
+const GEN_COLORS_DARK=[
+  {fill:'#1A4A1A',stroke:'#7DC87D',text:'#B8EDB8'},
+  {fill:'#4B1A6E',stroke:'#C99EE0',text:'#E5D0F5'},
+  {fill:'#633806',stroke:'#EF9F27',text:'#FAC775'},
+  {fill:'#085041',stroke:'#5DCAA5',text:'#9FE1CB'},
+  {fill:'#0C447C',stroke:'#85B7EB',text:'#B5D4F4'},
+  {fill:'#3C3489',stroke:'#AFA9EC',text:'#CECBF6'},
+  {fill:'#712B13',stroke:'#F0997B',text:'#F5C4B3'},
+  {fill:'#27500A',stroke:'#97C459',text:'#C0DD97'},
+];
+const dk=matchMedia('(prefers-color-scheme:dark)').matches;
+const GC=dk?GEN_COLORS_DARK:GEN_COLORS_LIGHT;
+function col(gen){return GC[gen]||GC[GC.length-1];}
+
+const CW=130,CH=54,GAP=14,COUPLE_GAP=10,SIB_GAP=14,ROW_H=130,CLUSTER_GAP=70;
+
+let DATA=null, P={}, byId={};
+
+function sv(t){return document.createElementNS('http://www.w3.org/2000/svg',t);}
+
+// ── Build layout automatically from relationships ──────────────────
+function computeLayout(){
+  P={};
+  byId={};
+  DATA.people.forEach(p=>byId[p.id]=p);
+
+  // Map: who is in a couple with whom
+  const partner={};
+  DATA.couples.forEach(([a,b])=>{partner[a]=b;partner[b]=a;});
+
+  // Map: child -> family, parent-set -> children
+  const childrenOf={}; // key: primary parent id -> {parents, children}
+  DATA.families.forEach(f=>{
+    childrenOf[f.parents[0]]=f;
+  });
+
+  // Determine generation rows from gen field
+  const maxGen=Math.max(...DATA.people.map(p=>p.gen));
+
+  // We place people using a recursive subtree-width approach.
+  // Each "unit" is either a single person or a couple.
+  // Width of a unit = sum of children subtree widths (or one slot if leaf).
+
+  const placed={};
+  let cursorX=30;
+
+  // Returns the center x of the placed unit
+  function placeUnit(rootId, depth){
+    const fam=childrenOf[rootId];
+    const p=byId[rootId];
+    const mate=partner[rootId];
+    const hasMate=mate!==undefined && byId[mate];
+    // collect children (only via the primary parent's family record)
+    let kids=fam?fam.children.filter(c=>byId[c]):[];
+
+    if(kids.length===0){
+      // leaf unit
+      const y=depth*ROW_H+30;
+      const x=cursorX;
+      P[rootId]={x:x,y:y};
+      let width=CW;
+      if(hasMate && placed[mate]===undefined){
+        P[mate]={x:x+CW+COUPLE_GAP,y:y};
+        placed[mate]=true;
+        width=CW*2+COUPLE_GAP;
+      }
+      cursorX=x+width+SIB_GAP;
+      placed[rootId]=true;
+      const cx=(P[rootId].x+CW/2 + (hasMate&&P[mate]?P[mate].x+CW/2:P[rootId].x+CW/2))/2;
+      return cx;
+    } else {
+      // place children first
+      const childCenters=[];
+      kids.forEach(k=>{
+        if(placed[k])return;
+        childCenters.push(placeUnit(k, depth+1));
+      });
+      const minC=Math.min(...childCenters), maxC=Math.max(...childCenters);
+      const center=(minC+maxC)/2;
+      const y=depth*ROW_H+30;
+      // place root (and mate) centered over children
+      if(hasMate && byId[mate]){
+        P[rootId]={x:center-CW-COUPLE_GAP/2,y:y};
+        P[mate]={x:center+COUPLE_GAP/2,y:y};
+        placed[mate]=true;
+      } else {
+        P[rootId]={x:center-CW/2,y:y};
+      }
+      placed[rootId]=true;
+      return center;
+    }
+  }
+
+  // Find roots: people who are not a child in any family AND are first in their couple or single
+  const childIds=new Set();
+  DATA.families.forEach(f=>f.children.forEach(c=>childIds.add(c)));
+  // Root units = primary parents of top-level families whose parents aren't children themselves
+  const roots=[];
+  DATA.families.forEach(f=>{
+    const pr=f.parents[0];
+    if(!childIds.has(pr) && !roots.includes(pr)) {
+      // only treat as root if this person isn't a mate of another root already
+      roots.push(pr);
+    }
+  });
+
+  // Place each root cluster, separating clusters with extra gap
+  roots.forEach(r=>{
+    if(placed[r])return;
+    placeUnit(r,0);
+    cursorX+=CLUSTER_GAP;
+  });
+
+  // Place any orphans (people not placed at all) in a row at bottom
+  DATA.people.forEach(p=>{
+    if(P[p.id]===undefined){
+      P[p.id]={x:cursorX,y:(maxGen+1)*ROW_H+30};
+      cursorX+=CW+SIB_GAP;
+    }
+  });
+}
+
+function mx(id){const p=P[id];return p?p.x+CW/2:0;}
+function ln(L,x1,y1,x2,y2){const l=sv('line');l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);l.setAttribute('stroke',dk?'#555':'#B4B2A9');l.setAttribute('stroke-width','1.5');L.appendChild(l);}
+function hrt(L,a,b){
+  const pa=P[a],pb=P[b];if(!pa||!pb)return;
+  const lf=pa.x<pb.x?pa:pb,rt=pa.x<pb.x?pb:pa;
+  const x1=lf.x+CW,x2=rt.x,y=lf.y+CH/2,hx=(x1+x2)/2;
+  if(x2>x1){ln(L,x1,y,hx-12,y);ln(L,hx+12,y,x2,y);}
+  const c=col(byId[a].gen);
+  const pill=sv('rect');pill.setAttribute('x',hx-12);pill.setAttribute('y',y-9);pill.setAttribute('width','24');pill.setAttribute('height','18');pill.setAttribute('rx','9');pill.setAttribute('fill',c.fill);pill.setAttribute('stroke',c.stroke);pill.setAttribute('stroke-width','0.5');
+  const t=sv('text');t.setAttribute('x',hx);t.setAttribute('y',y);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-size','10');t.setAttribute('fill',c.stroke);t.textContent='♥';
+  L.appendChild(pill);L.appendChild(t);
+}
+function brnch(L,parents,kids){
+  const pp=parents.map(id=>P[id]).filter(Boolean);
+  const cp=kids.map(id=>P[id]).filter(Boolean);
+  if(!pp.length||!cp.length)return;
+  const pcx=parents.map(mx).filter(x=>x),ccx=kids.map(mx).filter(x=>x);
+  const piv=pcx.reduce((a,b)=>a+b,0)/pcx.length;
+  const pbot=pp[0].y+CH,ctop=cp[0].y,mid=pbot+(ctop-pbot)/2;
+  pcx.forEach(x=>ln(L,x,pbot,x,mid-8));
+  if(pcx.length>1)ln(L,Math.min(...pcx),mid-8,Math.max(...pcx),mid-8);
+  ln(L,piv,mid-8,piv,mid+8);
+  if(ccx.length>1)ln(L,Math.min(...ccx),mid+8,Math.max(...ccx),mid+8);
+  ccx.forEach(x=>ln(L,x,mid+8,x,ctop));
+}
+function subtext(p){
+  const parts=[];
+  if(p.maiden)parts.push((p.gen<=2?'aka ':'née ')+p.maiden);
+  if(p.d)parts.push(p.b?p.b+'–'+p.d:'d. '+p.d);
+  else if(p.b)parts.push('b. '+p.b);
+  return parts.join(' · ');
+}
+function crd(L,p){
+  const pos=P[p.id];if(!pos)return;
+  const {x,y}=pos,c=col(p.gen);
+  const g=sv('g');g.setAttribute('class','pc');
+  const r=sv('rect');r.setAttribute('x',x);r.setAttribute('y',y);r.setAttribute('width',CW);r.setAttribute('height',CH);r.setAttribute('rx','9');r.setAttribute('fill',c.fill);r.setAttribute('stroke',c.stroke);r.setAttribute('stroke-width','1');
+  const av=sv('circle');av.setAttribute('cx',x+20);av.setAttribute('cy',y+CH/2);av.setAttribute('r','13');av.setAttribute('fill',c.stroke);av.setAttribute('opacity','0.2');
+  const it=sv('text');it.setAttribute('x',x+20);it.setAttribute('y',y+CH/2);it.setAttribute('text-anchor','middle');it.setAttribute('dominant-baseline','central');it.setAttribute('fill',c.text);it.setAttribute('font-size','10');it.setAttribute('font-weight','600');
+  it.textContent=p.name.split(' ').filter(w=>w).map(w=>w[0]).join('').slice(0,2).toUpperCase()||'?';
+  const nm=sv('text');nm.setAttribute('x',x+38);nm.setAttribute('y',y+18);nm.setAttribute('font-size','12');nm.setAttribute('font-weight','600');nm.setAttribute('fill',c.text);
+  nm.textContent=p.name.length>15?p.name.slice(0,14)+'…':p.name;
+  const dt=sv('text');const sub=subtext(p);dt.setAttribute('x',x+38);dt.setAttribute('y',y+34);dt.setAttribute('font-size','10');dt.setAttribute('fill',c.stroke);
+  dt.textContent=sub.length>19?sub.slice(0,18)+'…':sub;
+  g.appendChild(r);g.appendChild(av);g.appendChild(it);g.appendChild(nm);g.appendChild(dt);
+  L.appendChild(g);
+}
+function draw(){
+  const svg=document.getElementById('svg'),LL=document.getElementById('LL'),CL=document.getElementById('CL');
+  LL.innerHTML='';CL.innerHTML='';
+  DATA.couples.forEach(([a,b])=>hrt(LL,a,b));
+  DATA.families.forEach(f=>brnch(LL,f.parents,f.children));
+  DATA.people.forEach(p=>crd(CL,p));
+  const xs=Object.values(P).map(p=>p.x+CW), ys=Object.values(P).map(p=>p.y+CH);
+  const w=Math.max(...xs)+40, h=Math.max(...ys)+50;
+  svg.setAttribute('width',w);svg.setAttribute('height',h);svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+  svg.style.display='block';
+  document.getElementById('msg').style.display='none';
+}
+
+async function load(){
+  try{
+    const res=await fetch('family.json?t='+Date.now());
+    DATA=await res.json();
+    document.getElementById('title').textContent=DATA.title||'Family Tree';
+    document.getElementById('subtitle').textContent=DATA.subtitle||'';
+    document.getElementById('footer').textContent=(DATA.title||'')+' · Last updated 2026';
+    computeLayout();
+    draw();
+  }catch(e){
+    document.getElementById('msg').textContent='Could not load family.json — make sure it is in the same folder. ('+e.message+')';
+  }
+}
+
+// Drag to scroll
+const wrap=document.getElementById('wrap');
+let drag=false,sx=0,sy=0,sl=0,st=0;
+wrap.addEventListener('mousedown',e=>{drag=true;sx=e.pageX;sy=e.pageY;sl=wrap.scrollLeft;st=wrap.scrollTop;});
+document.addEventListener('mousemove',e=>{if(drag){wrap.scrollLeft=sl-(e.pageX-sx);wrap.scrollTop=st-(e.pageY-sy);}});
+document.addEventListener('mouseup',()=>drag=false);
+
+load();
+</script>
 </body>
 </html>
