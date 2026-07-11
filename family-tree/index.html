@@ -8,10 +8,10 @@
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
   :root{
-    --bg:#f9f7f4;--bg2:#f0ede8;--border:#ddd9d0;--text:#2c2a27;--text2:#6b6860;--accent:#5c3d1e;
+    --bg:#f9f7f4;--bg2:#f0ede8;--border:#ddd9d0;--text:#2c2a27;--text2:#6b6860;--accent:#5c3d1e;--ok:#2e7d32;--danger:#c0392b;
   }
   @media (prefers-color-scheme:dark){
-    :root{--bg:#1a1917;--bg2:#252320;--border:#3a3830;--text:#e8e4dc;--text2:#a09c94;--accent:#d4945a;}
+    :root{--bg:#1a1917;--bg2:#252320;--border:#3a3830;--text:#e8e4dc;--text2:#a09c94;--accent:#d4945a;--ok:#7dc87d;--danger:#e57373;}
   }
   body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh;}
   header{background:var(--bg2);border-bottom:1px solid var(--border);padding:1.25rem 2rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;}
@@ -31,8 +31,25 @@
   .pc{cursor:pointer;}
   .pc rect{transition:filter .12s;}
   .pc:hover rect{filter:brightness(0.93);}
+  .pc:active rect{filter:brightness(0.86);}
   .msg{padding:3rem;text-align:center;color:var(--text2);}
   footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--text2);border-top:1px solid var(--border);margin-top:1rem;}
+  /* Modal */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:100;display:none;}
+  .modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:101;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:1.5rem;width:min(440px,94vw);max-height:88vh;overflow-y:auto;display:none;}
+  .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;}
+  .modal-header h2{font-size:15px;font-weight:600;color:var(--accent);}
+  .modal-header button{padding:4px 10px;font-size:16px;line-height:1;}
+  .fi{margin-bottom:12px;}
+  .fi label{display:block;font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+  .fi input,.fi select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:14px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .modal-actions{display:flex;gap:8px;margin-top:1.25rem;}
+  .btn-save{flex:1;padding:10px;background:var(--accent);color:#fff;border-color:var(--accent);border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;}
+  .btn-del{padding:10px 14px;color:var(--danger);border-color:var(--danger);border-radius:8px;font-size:14px;cursor:pointer;background:transparent;}
+  .hint{font-size:12px;color:var(--text2);margin-top:4px;}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:200;}
+  .toast.show{opacity:1;}
 </style>
 </head>
 <body>
@@ -43,7 +60,7 @@
   </div>
   <div class="topbtns">
     <span id="syncStatus">Connecting…</span>
-    <a href="editor.html" class="btn">✎ Edit tree</a>
+    <a href="editor.html" class="btn">✎ Full editor</a>
   </div>
 </header>
 
@@ -56,6 +73,7 @@
   <span><span class="ld" style="background:#AFA9EC"></span>Gen 6</span>
   <span><span class="ld" style="background:#F0997B"></span>Gen 7</span>
   <span><span class="ld" style="background:#97C459"></span>Gen 8</span>
+  <span style="margin-left:8px;font-style:italic;">Double-click any card to edit</span>
 </div>
 
 <div class="wrap" id="wrap">
@@ -65,13 +83,45 @@
 
 <footer id="footer"></footer>
 
+<!-- Edit modal -->
+<div class="overlay" id="overlay" onclick="closeModal()"></div>
+<div class="modal" id="modal">
+  <div class="modal-header">
+    <h2 id="modalTitle">Edit person</h2>
+    <button onclick="closeModal()">✕</button>
+  </div>
+  <div class="fi"><label>Name</label><input id="m_name" type="text"></div>
+  <div class="fi"><label>Maiden / alternate name</label><input id="m_maiden" type="text" placeholder="optional"></div>
+  <div class="row2">
+    <div class="fi"><label>Birth year</label><input id="m_b" type="text"></div>
+    <div class="fi"><label>Death year</label><input id="m_d" type="text"></div>
+  </div>
+  <div class="fi"><label>Generation (0 = oldest)</label><input id="m_gen" type="number" min="0" max="12"></div>
+  <div class="fi">
+    <label>Custom colour</label>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input id="m_color" type="color" style="width:44px;height:32px;padding:2px;border:1px solid var(--border);border-radius:7px;cursor:pointer;">
+      <button type="button" onclick="clearModalColor()" style="font-size:12px;padding:5px 10px;">✕ Reset</button>
+    </div>
+    <div class="hint" id="m_colorHint"></div>
+  </div>
+  <div class="fi"><label>Spouse / partner</label><select id="m_spouse"><option value="">— none —</option></select></div>
+  <div class="fi"><label>Parent</label><select id="m_parent"><option value="">— none / root —</option></select></div>
+  <div class="modal-actions">
+    <button class="btn-save" onclick="saveModal()">Save changes</button>
+    <button class="btn-del" onclick="deleteFromModal()">Delete</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
 <script>
 // ── Supabase client ────────────────────────────────────────────────
 const SUPA_URL='https://jnwfkiogljtwlnnckzhv.supabase.co';
 const SUPA_KEY='sb_secret_Zc6UzSly-91krW8851o63g_SCouFpP5';
 const sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
 
-// Generation color palette (index by gen number)
+// Generation color palette
 const GEN_COLORS_LIGHT=[
   {fill:'#D8EDD8',stroke:'#2E6B2E',text:'#1A4A1A'},
   {fill:'#EDE0F5',stroke:'#7B3FA0',text:'#4B1A6E'},
@@ -104,95 +154,64 @@ function colFromHex(hex){
 }
 function pCol(p){return p.color?colFromHex(p.color):col(p.gen);}
 
-const CW=130,CH=54,GAP=14,COUPLE_GAP=10,SIB_GAP=14,ROW_H=130,CLUSTER_GAP=70;
+const CW=130,CH=54,COUPLE_GAP=10,SIB_GAP=14,ROW_H=130,CLUSTER_GAP=70;
 
-let DATA=null, P={}, byId={};
+let DATA=null, P={}, byIdMap={};
 
 function sv(t){return document.createElementNS('http://www.w3.org/2000/svg',t);}
 
-// ── Build layout automatically from relationships ──────────────────
+// ── Layout ─────────────────────────────────────────────────────────
 function computeLayout(){
-  P={};
-  byId={};
-  DATA.people.forEach(p=>byId[p.id]=p);
-
+  P={};byIdMap={};
+  DATA.people.forEach(p=>byIdMap[p.id]=p);
   const partner={};
   DATA.couples.forEach(([a,b])=>{partner[a]=b;partner[b]=a;});
-
   const childrenOf={};
-  DATA.families.forEach(f=>{
-    childrenOf[f.parents[0]]=f;
-  });
-
+  DATA.families.forEach(f=>{childrenOf[f.parents[0]]=f;});
   const maxGen=Math.max(...DATA.people.map(p=>p.gen));
-
   const placed={};
   let cursorX=30;
 
-  function placeUnit(rootId, depth){
-    const p=byId[rootId];
+  function placeUnit(rootId,depth){
     const mate=partner[rootId];
     const fam=childrenOf[rootId]||(mate!==undefined?childrenOf[mate]:null);
-    const hasMate=mate!==undefined && byId[mate];
-    let kids=fam?fam.children.filter(c=>byId[c]):[];
-
+    const hasMate=mate!==undefined&&byIdMap[mate];
+    const kids=fam?fam.children.filter(c=>byIdMap[c]):[];
     if(kids.length===0){
-      const y=depth*ROW_H+30;
-      const x=cursorX;
-      P[rootId]={x:x,y:y};
+      const y=depth*ROW_H+30,x=cursorX;
+      P[rootId]={x,y};
       let width=CW;
-      if(hasMate && placed[mate]===undefined){
-        P[mate]={x:x+CW+COUPLE_GAP,y:y};
-        placed[mate]=true;
-        width=CW*2+COUPLE_GAP;
-      }
-      cursorX=x+width+SIB_GAP;
-      placed[rootId]=true;
-      const cx=(P[rootId].x+CW/2 + (hasMate&&P[mate]?P[mate].x+CW/2:P[rootId].x+CW/2))/2;
+      if(hasMate&&placed[mate]===undefined){P[mate]={x:x+CW+COUPLE_GAP,y};placed[mate]=true;width=CW*2+COUPLE_GAP;}
+      cursorX=x+width+SIB_GAP;placed[rootId]=true;
+      const cx=(P[rootId].x+CW/2+(hasMate&&P[mate]?P[mate].x+CW/2:P[rootId].x+CW/2))/2;
       return cx;
     } else {
       const childCenters=[];
-      kids.forEach(k=>{
-        if(placed[k])return;
-        childCenters.push(placeUnit(k, depth+1));
-      });
-      const minC=Math.min(...childCenters), maxC=Math.max(...childCenters);
-      const center=(minC+maxC)/2;
-      const y=depth*ROW_H+30;
-      if(hasMate && byId[mate]){
-        P[rootId]={x:center-CW-COUPLE_GAP/2,y:y};
-        P[mate]={x:center+COUPLE_GAP/2,y:y};
-        placed[mate]=true;
-      } else {
-        P[rootId]={x:center-CW/2,y:y};
+      kids.forEach(k=>{if(placed[k])return;childCenters.push(placeUnit(k,depth+1));});
+      if(!childCenters.length){
+        const y=depth*ROW_H+30,x=cursorX;
+        P[rootId]={x,y};
+        if(hasMate&&placed[mate]===undefined){P[mate]={x:x+CW+COUPLE_GAP,y};placed[mate]=true;}
+        cursorX=x+CW*2+COUPLE_GAP+SIB_GAP;placed[rootId]=true;
+        return x+CW/2;
       }
-      placed[rootId]=true;
-      return center;
+      const minC=Math.min(...childCenters),maxC=Math.max(...childCenters);
+      const center=(minC+maxC)/2,y=depth*ROW_H+30;
+      if(hasMate&&byIdMap[mate]){
+        P[rootId]={x:center-CW-COUPLE_GAP/2,y};
+        P[mate]={x:center+COUPLE_GAP/2,y};
+        placed[mate]=true;
+      } else {P[rootId]={x:center-CW/2,y};}
+      placed[rootId]=true;return center;
     }
   }
 
   const childIds=new Set();
   DATA.families.forEach(f=>f.children.forEach(c=>childIds.add(c)));
   const roots=[];
-  DATA.families.forEach(f=>{
-    const pr=f.parents[0];
-    if(!childIds.has(pr) && !roots.includes(pr)){
-      roots.push(pr);
-    }
-  });
-
-  roots.forEach(r=>{
-    if(placed[r])return;
-    placeUnit(r,0);
-    cursorX+=CLUSTER_GAP;
-  });
-
-  DATA.people.forEach(p=>{
-    if(P[p.id]===undefined){
-      P[p.id]={x:cursorX,y:(maxGen+1)*ROW_H+30};
-      cursorX+=CW+SIB_GAP;
-    }
-  });
+  DATA.families.forEach(f=>{const pr=f.parents[0];if(!childIds.has(pr)&&!roots.includes(pr))roots.push(pr);});
+  roots.forEach(r=>{if(placed[r])return;placeUnit(r,0);cursorX+=CLUSTER_GAP;});
+  DATA.people.forEach(p=>{if(P[p.id]===undefined){P[p.id]={x:cursorX,y:(maxGen+1)*ROW_H+30};cursorX+=CW+SIB_GAP;}});
 }
 
 function mx(id){const p=P[id];return p?p.x+CW/2:0;}
@@ -202,7 +221,7 @@ function hrt(L,a,b){
   const lf=pa.x<pb.x?pa:pb,rt=pa.x<pb.x?pb:pa;
   const x1=lf.x+CW,x2=rt.x,y=lf.y+CH/2,hx=(x1+x2)/2;
   if(x2>x1){ln(L,x1,y,hx-12,y);ln(L,hx+12,y,x2,y);}
-  const c=col(byId[a].gen);
+  const c=col(byIdMap[a]?byIdMap[a].gen:0);
   const pill=sv('rect');pill.setAttribute('x',hx-12);pill.setAttribute('y',y-9);pill.setAttribute('width','24');pill.setAttribute('height','18');pill.setAttribute('rx','9');pill.setAttribute('fill',c.fill);pill.setAttribute('stroke',c.stroke);pill.setAttribute('stroke-width','0.5');
   const t=sv('text');t.setAttribute('x',hx);t.setAttribute('y',y);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-size','10');t.setAttribute('fill',c.stroke);t.textContent='♥';
   L.appendChild(pill);L.appendChild(t);
@@ -211,8 +230,6 @@ function brnch(L,parents,kids){
   const pp=parents.map(id=>P[id]).filter(Boolean);
   if(!pp.length)return;
   const parentY=pp[0].y;
-  // Only connect to children roughly one row below — skips cross-tree stray lines
-  // (e.g. someone born in one branch but placed visually in another after marrying)
   const localKids=kids.filter(id=>{const pos=P[id];return pos&&pos.y>parentY&&pos.y<parentY+ROW_H*2.5;});
   if(!localKids.length)return;
   const pcx=parents.map(mx).filter(x=>x),ccx=localKids.map(mx).filter(x=>x);
@@ -236,6 +253,7 @@ function crd(L,p){
   const pos=P[p.id];if(!pos)return;
   const {x,y}=pos,c=pCol(p);
   const g=sv('g');g.setAttribute('class','pc');
+  g.addEventListener('dblclick',e=>{e.stopPropagation();openEditModal(p.id);});
   const r=sv('rect');r.setAttribute('x',x);r.setAttribute('y',y);r.setAttribute('width',CW);r.setAttribute('height',CH);r.setAttribute('rx','9');r.setAttribute('fill',c.fill);r.setAttribute('stroke',c.stroke);r.setAttribute('stroke-width','1');
   const av=sv('circle');av.setAttribute('cx',x+20);av.setAttribute('cy',y+CH/2);av.setAttribute('r','13');av.setAttribute('fill',c.stroke);av.setAttribute('opacity','0.2');
   const it=sv('text');it.setAttribute('x',x+20);it.setAttribute('y',y+CH/2);it.setAttribute('text-anchor','middle');it.setAttribute('dominant-baseline','central');it.setAttribute('fill',c.text);it.setAttribute('font-size','10');it.setAttribute('font-weight','600');
@@ -253,55 +271,143 @@ function draw(){
   DATA.couples.forEach(([a,b])=>hrt(LL,a,b));
   DATA.families.forEach(f=>brnch(LL,f.parents,f.children));
   DATA.people.forEach(p=>crd(CL,p));
-  const xs=Object.values(P).map(p=>p.x+CW), ys=Object.values(P).map(p=>p.y+CH);
-  const w=Math.max(...xs)+40, h=Math.max(...ys)+50;
+  const xs=Object.values(P).map(p=>p.x+CW),ys=Object.values(P).map(p=>p.y+CH);
+  const w=Math.max(...xs)+40,h=Math.max(...ys)+50;
   svg.setAttribute('width',w);svg.setAttribute('height',h);svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
   svg.style.display='block';
   document.getElementById('msg').style.display='none';
 }
-
 function renderTree(){
   document.getElementById('title').textContent=DATA.title||'Family Tree';
   document.getElementById('subtitle').textContent=DATA.subtitle||'';
   document.getElementById('footer').textContent=(DATA.title||'')+' · Last updated '+new Date().getFullYear();
-  computeLayout();
-  draw();
+  computeLayout();draw();
 }
 
+// ── Supabase ───────────────────────────────────────────────────────
+async function saveToSupabase(){
+  const{error}=await sb.from('family_tree').upsert({id:1,data:DATA,updated_at:new Date().toISOString()});
+  if(error)console.error('Save failed:',error);
+}
 async function load(){
   const status=document.getElementById('syncStatus');
   try{
-    // Load from Supabase
-    const {data:row,error}=await sb.from('family_tree').select('data').eq('id',1).single();
-    if(row && !error){
+    const{data:row,error}=await sb.from('family_tree').select('data').eq('id',1).single();
+    if(row&&!error){
       DATA=row.data;
-      status.textContent='● Live';
-      status.style.color='var(--ok,#2e7d32)';
+      status.textContent='● Live';status.style.color='var(--ok)';
     } else {
-      // First run or offline — fall back to family.json
-      status.textContent='⚠ Offline — loading local data';
+      status.textContent='⚠ Offline';
       const cached=localStorage.getItem('familyTreeData');
       if(cached){DATA=JSON.parse(cached);}
       else{const res=await fetch('family.json?t='+Date.now());DATA=await res.json();}
     }
     renderTree();
-
-    // Subscribe to real-time changes from editors
-    sb.channel('family_tree_changes')
-      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'family_tree'},
-        payload=>{
-          DATA=payload.new.data;
-          renderTree();
-          status.textContent='● Updated';
-          setTimeout(()=>{status.textContent='● Live';},2000);
-        })
-      .subscribe();
-
+    sb.channel('family_tree_changes').on('postgres_changes',{event:'UPDATE',schema:'public',table:'family_tree'},payload=>{
+      DATA=payload.new.data;renderTree();
+      status.textContent='● Updated';setTimeout(()=>{status.textContent='● Live';},2000);
+    }).subscribe();
   }catch(e){
     document.getElementById('msg').textContent='Could not load family data — '+e.message;
     status.textContent='Error';
   }
 }
+
+// ── Edit modal ─────────────────────────────────────────────────────
+let editId=null;
+function getPerson(id){return DATA.people.find(p=>p.id===id);}
+function getPartner(id){for(const[a,b]of DATA.couples){if(a===id)return b;if(b===id)return a;}return null;}
+function getParent(id){for(const f of DATA.families){if(f.children.includes(id))return f.parents[0];}return null;}
+
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2000);}
+
+function openEditModal(id){
+  editId=id;
+  const p=getPerson(id);
+  document.getElementById('modalTitle').textContent='Edit: '+p.name;
+  document.getElementById('m_name').value=p.name;
+  document.getElementById('m_maiden').value=p.maiden||'';
+  document.getElementById('m_b').value=p.b||'';
+  document.getElementById('m_d').value=p.d||'';
+  document.getElementById('m_gen').value=p.gen;
+  const ci=document.getElementById('m_color'),hint=document.getElementById('m_colorHint');
+  if(p.color){ci.value=p.color;ci.dataset.custom='true';hint.textContent='Custom colour: '+p.color;}
+  else{ci.value='#888888';ci.dataset.custom='false';hint.textContent='Using generation colour.';}
+  const sp=document.getElementById('m_spouse');
+  sp.innerHTML='<option value="">— none —</option>';
+  const curSpouse=getPartner(id);
+  [...DATA.people].sort((a,b)=>a.name.localeCompare(b.name)).forEach(q=>{
+    if(q.id===id)return;
+    sp.insertAdjacentHTML('beforeend',`<option value="${q.id}"${curSpouse===q.id?' selected':''}>${q.name}</option>`);
+  });
+  const pa=document.getElementById('m_parent');
+  pa.innerHTML='<option value="">— none / root —</option>';
+  const curParent=getParent(id);
+  [...DATA.people].sort((a,b)=>a.name.localeCompare(b.name)).forEach(q=>{
+    if(q.id===id)return;
+    pa.insertAdjacentHTML('beforeend',`<option value="${q.id}"${curParent===q.id?' selected':''}>${q.name}</option>`);
+  });
+  document.getElementById('overlay').style.display='block';
+  document.getElementById('modal').style.display='block';
+  document.getElementById('m_name').focus();
+}
+
+function closeModal(){
+  document.getElementById('overlay').style.display='none';
+  document.getElementById('modal').style.display='none';
+  editId=null;
+}
+
+function clearModalColor(){
+  const ci=document.getElementById('m_color');
+  ci.value='#888888';ci.dataset.custom='false';
+  document.getElementById('m_colorHint').textContent='Using generation colour.';
+}
+
+async function saveModal(){
+  if(editId===null)return;
+  const p=getPerson(editId);
+  p.name=document.getElementById('m_name').value.trim()||p.name;
+  p.maiden=document.getElementById('m_maiden').value.trim();
+  p.b=document.getElementById('m_b').value.trim();
+  p.d=document.getElementById('m_d').value.trim();
+  p.gen=parseInt(document.getElementById('m_gen').value)||0;
+  const ci=document.getElementById('m_color');
+  if(ci.dataset.custom==='true'){p.color=ci.value;}else{delete p.color;}
+  // Spouse
+  const newSpouse=document.getElementById('m_spouse').value?parseInt(document.getElementById('m_spouse').value):null;
+  DATA.couples=DATA.couples.filter(c=>!c.includes(editId));
+  if(newSpouse){DATA.couples=DATA.couples.filter(c=>!c.includes(newSpouse));DATA.couples.push([editId,newSpouse]);}
+  // Parent
+  const newParent=document.getElementById('m_parent').value?parseInt(document.getElementById('m_parent').value):null;
+  DATA.families.forEach(f=>{f.children=f.children.filter(c=>c!==editId);});
+  DATA.families=DATA.families.filter(f=>f.children.length>0);
+  if(newParent){
+    let fam=DATA.families.find(f=>f.parents[0]===newParent);
+    if(!fam){const pp=getPartner(newParent);fam={parents:pp?[newParent,pp]:[newParent],children:[]};DATA.families.push(fam);}
+    fam.children.push(editId);
+  }
+  closeModal();renderTree();toast('Saved ✓');
+  await saveToSupabase();
+}
+
+async function deleteFromModal(){
+  if(editId===null)return;
+  const p=getPerson(editId);
+  if(!confirm('Delete '+p.name+'?'))return;
+  DATA.people=DATA.people.filter(q=>q.id!==editId);
+  DATA.couples=DATA.couples.filter(c=>!c.includes(editId));
+  DATA.families.forEach(f=>{f.children=f.children.filter(c=>c!==editId);});
+  DATA.families=DATA.families.filter(f=>f.children.length>0);
+  closeModal();renderTree();toast('Deleted');
+  await saveToSupabase();
+}
+
+document.getElementById('m_color').addEventListener('input',e=>{
+  e.target.dataset.custom='true';
+  document.getElementById('m_colorHint').textContent='Custom colour: '+e.target.value;
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
 // Drag to scroll
 const wrap=document.getElementById('wrap');
