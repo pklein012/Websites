@@ -130,9 +130,10 @@ function computeLayout(){
 
   // Returns the center x of the placed unit
   function placeUnit(rootId, depth){
-    const fam=childrenOf[rootId];
     const p=byId[rootId];
     const mate=partner[rootId];
+    // Check both self and mate for a family record (handles cases where spouse is primary parent)
+    const fam=childrenOf[rootId]||(mate!==undefined?childrenOf[mate]:null);
     const hasMate=mate!==undefined && byId[mate];
     // collect children (only via the primary parent's family record)
     let kids=fam?fam.children.filter(c=>byId[c]):[];
@@ -266,8 +267,15 @@ function draw(){
 
 async function load(){
   try{
-    const res=await fetch('family.json?t='+Date.now());
-    DATA=await res.json();
+    // Prefer localStorage (editor saves here so changes are instant)
+    const cached=localStorage.getItem('familyTreeData');
+    if(cached){DATA=JSON.parse(cached);}
+    else{const res=await fetch('family.json?t='+Date.now());DATA=await res.json();}
+    // Always fetch from file to refresh if it changed since last localStorage save
+    fetch('family.json?t='+Date.now()).then(r=>r.json()).then(d=>{
+      const lsRev=DATA._rev||0,fileRev=d._rev||0;
+      if(fileRev>lsRev){DATA=d;localStorage.setItem('familyTreeData',JSON.stringify(d));computeLayout();draw();}
+    }).catch(()=>{});
     document.getElementById('title').textContent=DATA.title||'Family Tree';
     document.getElementById('subtitle').textContent=DATA.subtitle||'';
     document.getElementById('footer').textContent=(DATA.title||'')+' · Last updated 2026';

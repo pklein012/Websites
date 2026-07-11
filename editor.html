@@ -53,7 +53,8 @@
   <div class="bar">
     <button onclick="loadFromFile()">↻ Reload from family.json</button>
     <label class="btn" style="cursor:pointer;">⬆ Import a family.json<input type="file" id="importFile" accept=".json" style="display:none;"></label>
-    <span class="hint" style="margin:0;">Make changes below, then Export and upload the file to GitHub.</span>
+    <span id="saveIndicator" style="font-size:12px;color:var(--ok);margin:0;font-weight:500;"></span>
+    <span class="hint" style="margin:0;">Changes save to your browser automatically. Use Export below to back up or publish to GitHub.</span>
   </div>
 
   <div class="grid">
@@ -134,6 +135,9 @@ function renderList(){
   document.getElementById('count').textContent=DATA.people.length;
   refreshSelects();
   document.getElementById('raw').value=JSON.stringify(DATA,null,2);
+  localStorage.setItem('familyTreeData',JSON.stringify(DATA));
+  const si=document.getElementById('saveIndicator');
+  if(si)si.textContent='✓ Changes saved to browser';
 }
 function refreshSelects(){
   const sp=document.getElementById('f_spouse'),pa=document.getElementById('f_parent');
@@ -235,6 +239,16 @@ async function loadFromFile(){
   try{const res=await fetch('family.json?t='+Date.now());DATA=await res.json();renderList();toast('Loaded family.json');}
   catch(e){toast('Could not load family.json');}
 }
+async function init(){
+  const cached=localStorage.getItem('familyTreeData');
+  if(cached){
+    try{DATA=JSON.parse(cached);renderList();
+      document.getElementById('saveIndicator').textContent='✓ Loaded from browser (local edits)';
+      return;
+    }catch(e){}
+  }
+  await loadFromFile();
+}
 document.getElementById('f_color').addEventListener('input',e=>{
   e.target.dataset.custom='true';
   document.getElementById('colorHint').textContent='Custom colour: '+e.target.value;
@@ -244,7 +258,7 @@ document.getElementById('importFile').addEventListener('change',e=>{
   const r=new FileReader();r.onload=()=>{try{DATA=JSON.parse(r.result);renderList();toast('Imported');}catch(err){alert('Invalid JSON');}};r.readAsText(f);
 });
 
-loadFromFile();
+init();
 </script>
 </body>
 </html>
