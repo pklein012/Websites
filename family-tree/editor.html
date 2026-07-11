@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Family Tree — Editor</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{--bg:#f9f7f4;--bg2:#f0ede8;--border:#ddd9d0;--text:#2c2a27;--text2:#6b6860;--accent:#5c3d1e;--ok:#2e7d32;--danger:#c0392b;}
+  @media (prefers-color-scheme:dark){:root{--bg:#1a1917;--bg2:#252320;--border:#3a3830;--text:#e8e4dc;--text2:#a09c94;--accent:#d4945a;--ok:#7dc87d;--danger:#e57373;}}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}
+  header{background:var(--bg2);border-bottom:1px solid var(--border);padding:1.25rem 2rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;}
+  header h1{font-size:1.2rem;font-weight:600;color:var(--accent);}
+  .container{max-width:1100px;margin:0 auto;padding:1.5rem 2rem 4rem;}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.5rem;align-items:center;}
+  button,.btn{padding:9px 16px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer;font-weight:500;text-decoration:none;display:inline-block;}
+  button:hover,.btn:hover{background:var(--border);}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  button.ok{background:var(--ok);color:#fff;border-color:var(--ok);}
+  button.danger{color:var(--danger);border-color:var(--danger);}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:2rem;}
+  @media(max-width:800px){.grid{grid-template-columns:1fr;}}
+  .panel{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:1.25rem;}
+  .panel h2{font-size:14px;font-weight:600;margin-bottom:1rem;color:var(--accent);}
+  .fi{margin-bottom:12px;}
+  .fi label{display:block;font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+  .fi input,.fi select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:14px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .people-list{max-height:480px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;}
+  .prow{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;}
+  .prow:hover{background:var(--bg);}
+  .prow:last-child{border-bottom:none;}
+  .prow .meta{color:var(--text2);font-size:11px;}
+  .search{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:14px;margin-bottom:10px;}
+  .hint{font-size:12px;color:var(--text2);line-height:1.5;margin-top:6px;}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:50;}
+  .toast.show{opacity:1;}
+  details{margin-top:10px;}
+  summary{cursor:pointer;font-size:12px;color:var(--text2);}
+  textarea{width:100%;min-height:120px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-family:monospace;font-size:11px;margin-top:8px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>✎ Family Tree Editor</h1>
+  <div class="bar" style="margin:0;">
+    <a href="index.html" class="btn">← View tree</a>
+    <button class="ok" onclick="exportJSON()">⬇ Export family.json</button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="bar">
+    <button onclick="reloadFromCloud()">↻ Reload from cloud</button>
+    <label class="btn" style="cursor:pointer;">⬆ Import a family.json<input type="file" id="importFile" accept=".json" style="display:none;"></label>
+    <span id="saveIndicator" style="font-size:12px;color:var(--ok);margin:0;font-weight:500;"></span>
+  </div>
+
+  <div class="grid">
+    <!-- People list -->
+    <div class="panel">
+      <h2>People (<span id="count">0</span>)</h2>
+      <input class="search" id="search" placeholder="Search people…" oninput="renderList()">
+      <div class="people-list" id="list"></div>
+      <button class="primary" style="margin-top:12px;width:100%;" onclick="newPerson()">+ Add new person</button>
+    </div>
+
+    <!-- Editor form -->
+    <div class="panel">
+      <h2 id="formTitle">Select a person to edit</h2>
+      <div id="form" style="display:none;">
+        <div class="fi"><label>Name</label><input id="f_name" type="text"></div>
+        <div class="fi"><label>Maiden / alternate name</label><input id="f_maiden" type="text" placeholder="optional"></div>
+        <div class="row2">
+          <div class="fi"><label>Birth year</label><input id="f_b" type="text"></div>
+          <div class="fi"><label>Death year</label><input id="f_d" type="text"></div>
+        </div>
+        <div class="fi"><label>Generation (0 = oldest)</label><input id="f_gen" type="number" min="0" max="12"></div>
+        <div class="fi">
+          <label>Custom colour</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="f_color" type="color" style="width:48px;height:36px;padding:2px;border:1px solid var(--border);border-radius:7px;background:var(--bg);cursor:pointer;">
+            <button type="button" onclick="clearColor()" style="font-size:12px;padding:6px 10px;">✕ Reset to generation colour</button>
+          </div>
+          <div class="hint" id="colorHint"></div>
+        </div>
+
+        <div class="fi"><label>Spouse / partner</label>
+          <select id="f_spouse"><option value="">— none —</option></select>
+        </div>
+        <div class="fi"><label>Parent (their family)</label>
+          <select id="f_parent"><option value="">— none / root —</option></select>
+          <div class="hint">Choose the parent this person is a child of. The tree positions them automatically.</div>
+        </div>
+
+        <div class="bar" style="margin-top:1rem;">
+          <button class="primary" onclick="saveForm()">Save changes</button>
+          <button class="danger" onclick="deletePerson()">Delete person</button>
+        </div>
+      </div>
+      <p class="hint" id="emptyHint">Click a person on the left, or add a new one.</p>
+    </div>
+  </div>
+
+  <details>
+    <summary>View / paste raw JSON</summary>
+    <textarea id="raw" spellcheck="false"></textarea>
+    <button onclick="applyRaw()" style="margin-top:8px;">Apply pasted JSON</button>
+  </details>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Supabase client ────────────────────────────────────────────────
+const SUPA_URL='https://jnwfkiogljtwlnnckzhv.supabase.co';
+const SUPA_KEY='sb_secret_Zc6UzSly-91krW8851o63g_SCouFpP5';
+const sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+
+let DATA={title:"Family Tree",subtitle:"",people:[],couples:[],families:[]};
+let selId=null;
+
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2000);}
+function byId(id){return DATA.people.find(p=>p.id===id);}
+function partnerOf(id){for(const[a,b]of DATA.couples){if(a===id)return b;if(b===id)return a;}return null;}
+function parentOf(id){for(const f of DATA.families){if(f.children.includes(id))return f.parents[0];}return null;}
+
+// ── Supabase save/load ─────────────────────────────────────────────
+async function saveToSupabase(){
+  const si=document.getElementById('saveIndicator');
+  si.textContent='Saving…';
+  const {error}=await sb.from('family_tree')
+    .upsert({id:1,data:DATA,updated_at:new Date().toISOString()});
+  if(error){
+    si.textContent='⚠ Cloud save failed — changes saved locally';
+    console.error(error);
+  } else {
+    si.textContent='✓ Saved to cloud';
+  }
+}
+
+async function reloadFromCloud(){
+  const {data:row,error}=await sb.from('family_tree').select('data').eq('id',1).single();
+  if(row && !error){
+    DATA=row.data;
+    renderList();
+    toast('Reloaded from cloud ✓');
+  } else {
+    toast('Cloud unavailable — using local data');
+  }
+}
+
+function renderList(){
+  const q=(document.getElementById('search').value||'').toLowerCase();
+  const list=document.getElementById('list');
+  list.innerHTML='';
+  const sorted=[...DATA.people].sort((a,b)=>a.name.localeCompare(b.name));
+  sorted.filter(p=>p.name.toLowerCase().includes(q)).forEach(p=>{
+    const div=document.createElement('div');div.className='prow';div.onclick=()=>select(p.id);
+    const yr=p.d?(p.b?p.b+'–'+p.d:'d.'+p.d):(p.b?'b.'+p.b:'');
+    div.innerHTML=`<span>${p.name}</span><span class="meta">${yr} · gen ${p.gen}</span>`;
+    list.appendChild(div);
+  });
+  document.getElementById('count').textContent=DATA.people.length;
+  refreshSelects();
+  document.getElementById('raw').value=JSON.stringify(DATA,null,2);
+  localStorage.setItem('familyTreeData',JSON.stringify(DATA));
+}
+
+function refreshSelects(){
+  const sp=document.getElementById('f_spouse'),pa=document.getElementById('f_parent');
+  const opts=[...DATA.people].sort((a,b)=>a.name.localeCompare(b.name));
+  sp.innerHTML='<option value="">— none —</option>';
+  pa.innerHTML='<option value="">— none / root —</option>';
+  opts.forEach(p=>{
+    if(p.id!==selId){
+      sp.insertAdjacentHTML('beforeend',`<option value="${p.id}">${p.name}</option>`);
+      pa.insertAdjacentHTML('beforeend',`<option value="${p.id}">${p.name}</option>`);
+    }
+  });
+}
+
+function select(id){
+  selId=id;const p=byId(id);
+  document.getElementById('form').style.display='block';
+  document.getElementById('emptyHint').style.display='none';
+  document.getElementById('formTitle').textContent='Editing: '+p.name;
+  document.getElementById('f_name').value=p.name;
+  document.getElementById('f_maiden').value=p.maiden||'';
+  document.getElementById('f_b').value=p.b||'';
+  document.getElementById('f_d').value=p.d||'';
+  document.getElementById('f_gen').value=p.gen;
+  refreshSelects();
+  document.getElementById('f_spouse').value=partnerOf(id)||'';
+  document.getElementById('f_parent').value=parentOf(id)||'';
+  const colorInput=document.getElementById('f_color');
+  const hint=document.getElementById('colorHint');
+  if(p.color){colorInput.value=p.color;colorInput.dataset.custom='true';hint.textContent='Custom colour: '+p.color;}
+  else{colorInput.value='#888888';colorInput.dataset.custom='false';hint.textContent='Using generation colour (no custom colour set).';}
+}
+
+function clearColor(){
+  const ci=document.getElementById('f_color');
+  ci.value='#888888';ci.dataset.custom='false';
+  document.getElementById('colorHint').textContent='Using generation colour (no custom colour set).';
+}
+
+function newPerson(){
+  const id=Math.max(0,...DATA.people.map(p=>p.id))+1;
+  const p={id,name:'New Person',maiden:'',b:'',d:'',gen:0};
+  DATA.people.push(p);
+  renderList();select(id);
+  document.getElementById('f_name').select();
+}
+
+async function saveForm(){
+  if(selId===null)return;
+  const p=byId(selId);
+  p.name=document.getElementById('f_name').value.trim()||p.name;
+  p.maiden=document.getElementById('f_maiden').value.trim();
+  p.b=document.getElementById('f_b').value.trim();
+  p.d=document.getElementById('f_d').value.trim();
+  p.gen=parseInt(document.getElementById('f_gen').value)||0;
+  const ci=document.getElementById('f_color');
+  if(ci.dataset.custom==='true'){p.color=ci.value;}else{delete p.color;}
+
+  // Spouse
+  const newSpouse=document.getElementById('f_spouse').value?parseInt(document.getElementById('f_spouse').value):null;
+  DATA.couples=DATA.couples.filter(c=>!c.includes(selId));
+  if(newSpouse){DATA.couples=DATA.couples.filter(c=>!c.includes(newSpouse));DATA.couples.push([selId,newSpouse]);}
+
+  // Parent
+  const newParent=document.getElementById('f_parent').value?parseInt(document.getElementById('f_parent').value):null;
+  DATA.families.forEach(f=>{f.children=f.children.filter(c=>c!==selId);});
+  DATA.families=DATA.families.filter(f=>f.children.length>0);
+  if(newParent){
+    let fam=DATA.families.find(f=>f.parents[0]===newParent);
+    if(!fam){
+      const pp=partnerOf(newParent);
+      fam={parents:pp?[newParent,pp]:[newParent],children:[]};
+      DATA.families.push(fam);
+    }
+    fam.children.push(selId);
+  }
+  renderList();
+  toast('Saved ✓');
+  await saveToSupabase();
+}
+
+async function deletePerson(){
+  if(selId===null)return;
+  if(!confirm('Delete '+byId(selId).name+'?'))return;
+  DATA.people=DATA.people.filter(p=>p.id!==selId);
+  DATA.couples=DATA.couples.filter(c=>!c.includes(selId));
+  DATA.families.forEach(f=>{f.children=f.children.filter(c=>c!==selId);});
+  DATA.families=DATA.families.filter(f=>f.children.length>0);
+  selId=null;
+  document.getElementById('form').style.display='none';
+  document.getElementById('emptyHint').style.display='block';
+  document.getElementById('formTitle').textContent='Select a person to edit';
+  renderList();
+  toast('Deleted');
+  await saveToSupabase();
+}
+
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(DATA,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='family.json';a.click();
+  toast('Downloaded family.json');
+}
+
+async function applyRaw(){
+  try{DATA=JSON.parse(document.getElementById('raw').value);renderList();toast('Applied');await saveToSupabase();}
+  catch(e){alert('Invalid JSON: '+e.message);}
+}
+
+async function loadFromFile(){
+  try{const res=await fetch('family.json?t='+Date.now());DATA=await res.json();renderList();}
+  catch(e){toast('Could not load family.json');}
+}
+
+async function init(){
+  const si=document.getElementById('saveIndicator');
+  si.textContent='Connecting to cloud…';
+
+  const {data:row,error}=await sb.from('family_tree').select('data').eq('id',1).single();
+  if(row && !error){
+    DATA=row.data;
+    renderList();
+    si.textContent='✓ Loaded from cloud';
+  } else {
+    // No cloud data yet — load locally then push to cloud
+    const cached=localStorage.getItem('familyTreeData');
+    if(cached){
+      try{DATA=JSON.parse(cached);}catch(e){}
+    }
+    if(!DATA.people.length){
+      si.textContent='Loading from file…';
+      await loadFromFile();
+    } else {
+      renderList();
+    }
+    // First-time sync: push local data up to cloud
+    si.textContent='First sync — uploading to cloud…';
+    await saveToSupabase();
+  }
+}
+
+document.getElementById('f_color').addEventListener('input',e=>{
+  e.target.dataset.custom='true';
+  document.getElementById('colorHint').textContent='Custom colour: '+e.target.value;
+});
+
+document.getElementById('importFile').addEventListener('change',async e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=async()=>{
+    try{DATA=JSON.parse(r.result);renderList();toast('Imported');await saveToSupabase();}
+    catch(err){alert('Invalid JSON');}
+  };
+  r.readAsText(f);
+});
+
+init();
+</script>
+</body>
+</html>
