@@ -17,7 +17,7 @@
   header{background:var(--bg2);border-bottom:1px solid var(--border);padding:1.25rem 2rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;}
   header h1{font-size:1.3rem;font-weight:600;color:var(--accent);}
   header p{font-size:0.8rem;color:var(--text2);margin-top:2px;}
-  .topbtns{display:flex;gap:8px;align-items:center;}
+  .topbtns{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
   .topbtns a{text-decoration:none;}
   button,.btn{padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer;font-weight:500;}
   button:hover,.btn:hover{background:var(--border);}
@@ -25,13 +25,12 @@
   .legend{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:0.75rem 2rem;background:var(--bg2);border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);}
   .legend span{display:flex;align-items:center;gap:5px;}
   .ld{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
-  .wrap{overflow:auto;padding:1.5rem;cursor:grab;}
-  .wrap:active{cursor:grabbing;}
+  .wrap{overflow:auto;padding:1.5rem;cursor:grab;user-select:none;}
+  .wrap.dragging-card{cursor:default;}
   svg{display:block;}
-  .pc{cursor:pointer;}
-  .pc rect{transition:filter .12s;}
-  .pc:hover rect{filter:brightness(0.93);}
-  .pc:active rect{filter:brightness(0.86);}
+  .pc{cursor:grab;}
+  .pc:hover rect:first-child{filter:brightness(0.93);}
+  .pc.dragging{cursor:grabbing;}
   .msg{padding:3rem;text-align:center;color:var(--text2);}
   footer{text-align:center;padding:1.5rem;font-size:11px;color:var(--text2);border-top:1px solid var(--border);margin-top:1rem;}
   /* Modal */
@@ -60,6 +59,7 @@
   </div>
   <div class="topbtns">
     <span id="syncStatus">Connecting…</span>
+    <button onclick="resetLayout()">Reset layout</button>
     <a href="editor.html" class="btn">✎ Full editor</a>
   </div>
 </header>
@@ -73,7 +73,7 @@
   <span><span class="ld" style="background:#AFA9EC"></span>Gen 6</span>
   <span><span class="ld" style="background:#F0997B"></span>Gen 7</span>
   <span><span class="ld" style="background:#97C459"></span>Gen 8</span>
-  <span style="margin-left:8px;font-style:italic;">Double-click any card to edit</span>
+  <span style="margin-left:8px;font-style:italic;">Drag to reposition · Double-click to edit</span>
 </div>
 
 <div class="wrap" id="wrap">
@@ -116,31 +116,23 @@
 <div class="toast" id="toast"></div>
 
 <script>
-// ── Supabase client ────────────────────────────────────────────────
+// ── Supabase ───────────────────────────────────────────────────────
 const SUPA_URL='https://jnwfkiogljtwlnnckzhv.supabase.co';
 const SUPA_KEY='sb_secret_Zc6UzSly-91krW8851o63g_SCouFpP5';
 const sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
 
-// Generation color palette
+// ── Colours ────────────────────────────────────────────────────────
 const GEN_COLORS_LIGHT=[
-  {fill:'#D8EDD8',stroke:'#2E6B2E',text:'#1A4A1A'},
-  {fill:'#EDE0F5',stroke:'#7B3FA0',text:'#4B1A6E'},
-  {fill:'#FAEEDA',stroke:'#854F0B',text:'#633806'},
-  {fill:'#E1F5EE',stroke:'#0F6E56',text:'#085041'},
-  {fill:'#E6F1FB',stroke:'#185FA5',text:'#0C447C'},
-  {fill:'#EEEDFE',stroke:'#534AB7',text:'#3C3489'},
-  {fill:'#FAECE7',stroke:'#993C1D',text:'#712B13'},
-  {fill:'#EAF3DE',stroke:'#3B6D11',text:'#27500A'},
+  {fill:'#D8EDD8',stroke:'#2E6B2E',text:'#1A4A1A'},{fill:'#EDE0F5',stroke:'#7B3FA0',text:'#4B1A6E'},
+  {fill:'#FAEEDA',stroke:'#854F0B',text:'#633806'},{fill:'#E1F5EE',stroke:'#0F6E56',text:'#085041'},
+  {fill:'#E6F1FB',stroke:'#185FA5',text:'#0C447C'},{fill:'#EEEDFE',stroke:'#534AB7',text:'#3C3489'},
+  {fill:'#FAECE7',stroke:'#993C1D',text:'#712B13'},{fill:'#EAF3DE',stroke:'#3B6D11',text:'#27500A'},
 ];
 const GEN_COLORS_DARK=[
-  {fill:'#1A4A1A',stroke:'#7DC87D',text:'#B8EDB8'},
-  {fill:'#4B1A6E',stroke:'#C99EE0',text:'#E5D0F5'},
-  {fill:'#633806',stroke:'#EF9F27',text:'#FAC775'},
-  {fill:'#085041',stroke:'#5DCAA5',text:'#9FE1CB'},
-  {fill:'#0C447C',stroke:'#85B7EB',text:'#B5D4F4'},
-  {fill:'#3C3489',stroke:'#AFA9EC',text:'#CECBF6'},
-  {fill:'#712B13',stroke:'#F0997B',text:'#F5C4B3'},
-  {fill:'#27500A',stroke:'#97C459',text:'#C0DD97'},
+  {fill:'#1A4A1A',stroke:'#7DC87D',text:'#B8EDB8'},{fill:'#4B1A6E',stroke:'#C99EE0',text:'#E5D0F5'},
+  {fill:'#633806',stroke:'#EF9F27',text:'#FAC775'},{fill:'#085041',stroke:'#5DCAA5',text:'#9FE1CB'},
+  {fill:'#0C447C',stroke:'#85B7EB',text:'#B5D4F4'},{fill:'#3C3489',stroke:'#AFA9EC',text:'#CECBF6'},
+  {fill:'#712B13',stroke:'#F0997B',text:'#F5C4B3'},{fill:'#27500A',stroke:'#97C459',text:'#C0DD97'},
 ];
 const dk=matchMedia('(prefers-color-scheme:dark)').matches;
 const GC=dk?GEN_COLORS_DARK:GEN_COLORS_LIGHT;
@@ -148,15 +140,12 @@ function col(gen){return GC[gen]||GC[GC.length-1];}
 function colFromHex(hex){
   const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
   const lf=(v)=>Math.round(v+(255-v)*0.65);
-  const fill=`rgb(${lf(r)},${lf(g)},${lf(b)})`;
-  const text=`rgb(${Math.round(r*0.35)},${Math.round(g*0.35)},${Math.round(b*0.35)})`;
-  return {fill,stroke:hex,text};
+  return{fill:`rgb(${lf(r)},${lf(g)},${lf(b)})`,stroke:hex,text:`rgb(${Math.round(r*.35)},${Math.round(g*.35)},${Math.round(b*.35)})`};
 }
 function pCol(p){return p.color?colFromHex(p.color):col(p.gen);}
 
 const CW=130,CH=54,COUPLE_GAP=10,SIB_GAP=14,ROW_H=130,CLUSTER_GAP=70;
-
-let DATA=null, P={}, byIdMap={};
+let DATA=null,P={},byIdMap={};
 
 function sv(t){return document.createElementNS('http://www.w3.org/2000/svg',t);}
 
@@ -169,8 +158,7 @@ function computeLayout(){
   const childrenOf={};
   DATA.families.forEach(f=>{childrenOf[f.parents[0]]=f;});
   const maxGen=Math.max(...DATA.people.map(p=>p.gen));
-  const placed={};
-  let cursorX=30;
+  const placed={};let cursorX=30;
 
   function placeUnit(rootId,depth){
     const mate=partner[rootId];
@@ -179,29 +167,21 @@ function computeLayout(){
     const kids=fam?fam.children.filter(c=>byIdMap[c]):[];
     if(kids.length===0){
       const y=depth*ROW_H+30,x=cursorX;
-      P[rootId]={x,y};
-      let width=CW;
+      P[rootId]={x,y};let width=CW;
       if(hasMate&&placed[mate]===undefined){P[mate]={x:x+CW+COUPLE_GAP,y};placed[mate]=true;width=CW*2+COUPLE_GAP;}
       cursorX=x+width+SIB_GAP;placed[rootId]=true;
-      const cx=(P[rootId].x+CW/2+(hasMate&&P[mate]?P[mate].x+CW/2:P[rootId].x+CW/2))/2;
-      return cx;
+      return(P[rootId].x+CW/2+(hasMate&&P[mate]?P[mate].x+CW/2:P[rootId].x+CW/2))/2;
     } else {
       const childCenters=[];
       kids.forEach(k=>{if(placed[k])return;childCenters.push(placeUnit(k,depth+1));});
       if(!childCenters.length){
-        const y=depth*ROW_H+30,x=cursorX;
-        P[rootId]={x,y};
+        const y=depth*ROW_H+30,x=cursorX;P[rootId]={x,y};
         if(hasMate&&placed[mate]===undefined){P[mate]={x:x+CW+COUPLE_GAP,y};placed[mate]=true;}
-        cursorX=x+CW*2+COUPLE_GAP+SIB_GAP;placed[rootId]=true;
-        return x+CW/2;
+        cursorX=x+CW*2+COUPLE_GAP+SIB_GAP;placed[rootId]=true;return x+CW/2;
       }
-      const minC=Math.min(...childCenters),maxC=Math.max(...childCenters);
-      const center=(minC+maxC)/2,y=depth*ROW_H+30;
-      if(hasMate&&byIdMap[mate]){
-        P[rootId]={x:center-CW-COUPLE_GAP/2,y};
-        P[mate]={x:center+COUPLE_GAP/2,y};
-        placed[mate]=true;
-      } else {P[rootId]={x:center-CW/2,y};}
+      const center=(Math.min(...childCenters)+Math.max(...childCenters))/2,y=depth*ROW_H+30;
+      if(hasMate&&byIdMap[mate]){P[rootId]={x:center-CW-COUPLE_GAP/2,y};P[mate]={x:center+COUPLE_GAP/2,y};placed[mate]=true;}
+      else{P[rootId]={x:center-CW/2,y};}
       placed[rootId]=true;return center;
     }
   }
@@ -212,10 +192,19 @@ function computeLayout(){
   DATA.families.forEach(f=>{const pr=f.parents[0];if(!childIds.has(pr)&&!roots.includes(pr))roots.push(pr);});
   roots.forEach(r=>{if(placed[r])return;placeUnit(r,0);cursorX+=CLUSTER_GAP;});
   DATA.people.forEach(p=>{if(P[p.id]===undefined){P[p.id]={x:cursorX,y:(maxGen+1)*ROW_H+30};cursorX+=CW+SIB_GAP;}});
+
+  // Apply saved position overrides from drag
+  if(DATA._positions){
+    Object.entries(DATA._positions).forEach(([id,pos])=>{
+      const nid=parseInt(id);if(byIdMap[nid])P[nid]={x:pos.x,y:pos.y};
+    });
+  }
 }
 
+// ── Drawing ────────────────────────────────────────────────────────
 function mx(id){const p=P[id];return p?p.x+CW/2:0;}
 function ln(L,x1,y1,x2,y2){const l=sv('line');l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);l.setAttribute('stroke',dk?'#555':'#B4B2A9');l.setAttribute('stroke-width','1.5');L.appendChild(l);}
+
 function hrt(L,a,b){
   const pa=P[a],pb=P[b];if(!pa||!pb)return;
   const lf=pa.x<pb.x?pa:pb,rt=pa.x<pb.x?pb:pa;
@@ -226,9 +215,9 @@ function hrt(L,a,b){
   const t=sv('text');t.setAttribute('x',hx);t.setAttribute('y',y);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-size','10');t.setAttribute('fill',c.stroke);t.textContent='♥';
   L.appendChild(pill);L.appendChild(t);
 }
+
 function brnch(L,parents,kids){
-  const pp=parents.map(id=>P[id]).filter(Boolean);
-  if(!pp.length)return;
+  const pp=parents.map(id=>P[id]).filter(Boolean);if(!pp.length)return;
   const parentY=pp[0].y;
   const localKids=kids.filter(id=>{const pos=P[id];return pos&&pos.y>parentY&&pos.y<parentY+ROW_H*2.5;});
   if(!localKids.length)return;
@@ -242,29 +231,55 @@ function brnch(L,parents,kids){
   if(ccx.length>1)ln(L,Math.min(...ccx),mid+8,Math.max(...ccx),mid+8);
   ccx.forEach(x=>ln(L,x,mid+8,x,ctop));
 }
+
+function redrawLines(){
+  const LL=document.getElementById('LL');LL.innerHTML='';
+  DATA.couples.forEach(([a,b])=>hrt(LL,a,b));
+  DATA.families.forEach(f=>brnch(LL,f.parents,f.children));
+}
+
 function subtext(p){
   const parts=[];
   if(p.maiden)parts.push((p.gen<=2?'aka ':'née ')+p.maiden);
-  if(p.d)parts.push(p.b?p.b+'–'+p.d:'d. '+p.d);
-  else if(p.b)parts.push('b. '+p.b);
+  if(p.d)parts.push(p.b?p.b+'–'+p.d:'d. '+p.d);else if(p.b)parts.push('b. '+p.b);
   return parts.join(' · ');
 }
+
 function crd(L,p){
   const pos=P[p.id];if(!pos)return;
-  const {x,y}=pos,c=pCol(p);
-  const g=sv('g');g.setAttribute('class','pc');
-  g.addEventListener('dblclick',e=>{e.stopPropagation();openEditModal(p.id);});
-  const r=sv('rect');r.setAttribute('x',x);r.setAttribute('y',y);r.setAttribute('width',CW);r.setAttribute('height',CH);r.setAttribute('rx','9');r.setAttribute('fill',c.fill);r.setAttribute('stroke',c.stroke);r.setAttribute('stroke-width','1');
-  const av=sv('circle');av.setAttribute('cx',x+20);av.setAttribute('cy',y+CH/2);av.setAttribute('r','13');av.setAttribute('fill',c.stroke);av.setAttribute('opacity','0.2');
-  const it=sv('text');it.setAttribute('x',x+20);it.setAttribute('y',y+CH/2);it.setAttribute('text-anchor','middle');it.setAttribute('dominant-baseline','central');it.setAttribute('fill',c.text);it.setAttribute('font-size','10');it.setAttribute('font-weight','600');
+  const{x,y}=pos,c=pCol(p);
+  const g=sv('g');
+  g.setAttribute('class','pc');
+  g.setAttribute('transform',`translate(${x},${y})`);
+  g.setAttribute('data-pid',p.id);
+
+  // All coords relative to (0,0) — group transform handles position
+  const r=sv('rect');r.setAttribute('x',0);r.setAttribute('y',0);r.setAttribute('width',CW);r.setAttribute('height',CH);r.setAttribute('rx','9');r.setAttribute('fill',c.fill);r.setAttribute('stroke',c.stroke);r.setAttribute('stroke-width','1');
+  const av=sv('circle');av.setAttribute('cx',20);av.setAttribute('cy',CH/2);av.setAttribute('r','13');av.setAttribute('fill',c.stroke);av.setAttribute('opacity','0.2');
+  const it=sv('text');it.setAttribute('x',20);it.setAttribute('y',CH/2);it.setAttribute('text-anchor','middle');it.setAttribute('dominant-baseline','central');it.setAttribute('fill',c.text);it.setAttribute('font-size','10');it.setAttribute('font-weight','600');
   it.textContent=p.name.split(' ').filter(w=>w).map(w=>w[0]).join('').slice(0,2).toUpperCase()||'?';
-  const nm=sv('text');nm.setAttribute('x',x+38);nm.setAttribute('y',y+18);nm.setAttribute('font-size','12');nm.setAttribute('font-weight','600');nm.setAttribute('fill',c.text);
+  const nm=sv('text');nm.setAttribute('x',38);nm.setAttribute('y',18);nm.setAttribute('font-size','12');nm.setAttribute('font-weight','600');nm.setAttribute('fill',c.text);
   nm.textContent=p.name.length>15?p.name.slice(0,14)+'…':p.name;
-  const dt=sv('text');const sub=subtext(p);dt.setAttribute('x',x+38);dt.setAttribute('y',y+34);dt.setAttribute('font-size','10');dt.setAttribute('fill',c.stroke);
+  const dt=sv('text');const sub=subtext(p);dt.setAttribute('x',38);dt.setAttribute('y',34);dt.setAttribute('font-size','10');dt.setAttribute('fill',c.stroke);
   dt.textContent=sub.length>19?sub.slice(0,18)+'…':sub;
   g.appendChild(r);g.appendChild(av);g.appendChild(it);g.appendChild(nm);g.appendChild(dt);
   L.appendChild(g);
+
+  // Drag
+  g.addEventListener('mousedown',e=>{
+    if(e.button!==0)return;
+    e.stopPropagation();
+    const svgCoord=clientToSVG(e.clientX,e.clientY);
+    dragState={id:p.id,startSVG:svgCoord,origPos:{x:P[p.id].x,y:P[p.id].y},moved:false};
+    g.setAttribute('class','pc dragging');
+  });
+  g.addEventListener('dblclick',e=>{
+    e.stopPropagation();
+    if(lastDragMoved){lastDragMoved=false;return;}
+    openEditModal(p.id);
+  });
 }
+
 function draw(){
   const svg=document.getElementById('svg'),LL=document.getElementById('LL'),CL=document.getElementById('CL');
   LL.innerHTML='';CL.innerHTML='';
@@ -272,11 +287,12 @@ function draw(){
   DATA.families.forEach(f=>brnch(LL,f.parents,f.children));
   DATA.people.forEach(p=>crd(CL,p));
   const xs=Object.values(P).map(p=>p.x+CW),ys=Object.values(P).map(p=>p.y+CH);
-  const w=Math.max(...xs)+40,h=Math.max(...ys)+50;
+  const w=Math.max(...xs)+60,h=Math.max(...ys)+60;
   svg.setAttribute('width',w);svg.setAttribute('height',h);svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
   svg.style.display='block';
   document.getElementById('msg').style.display='none';
 }
+
 function renderTree(){
   document.getElementById('title').textContent=DATA.title||'Family Tree';
   document.getElementById('subtitle').textContent=DATA.subtitle||'';
@@ -284,23 +300,71 @@ function renderTree(){
   computeLayout();draw();
 }
 
+// ── Drag-to-reposition ─────────────────────────────────────────────
+let dragState=null,lastDragMoved=false;
+
+function clientToSVG(clientX,clientY){
+  const svgEl=document.getElementById('svg');
+  const rect=svgEl.getBoundingClientRect();
+  return{x:clientX-rect.left,y:clientY-rect.top};
+}
+
+document.addEventListener('mousemove',e=>{
+  if(dragState){
+    const svgCoord=clientToSVG(e.clientX,e.clientY);
+    const dx=svgCoord.x-dragState.startSVG.x;
+    const dy=svgCoord.y-dragState.startSVG.y;
+    if(!dragState.moved&&Math.abs(dx)<4&&Math.abs(dy)<4)return;
+    dragState.moved=true;
+    const newX=dragState.origPos.x+dx,newY=dragState.origPos.y+dy;
+    P[dragState.id]={x:newX,y:newY};
+    const el=document.querySelector(`[data-pid="${dragState.id}"]`);
+    if(el)el.setAttribute('transform',`translate(${newX},${newY})`);
+    redrawLines();
+    return;
+  }
+  // Pan
+  if(panDrag){wrap.scrollLeft=panSL-(e.pageX-panSX);wrap.scrollTop=panST-(e.pageY-panSY);}
+});
+
+document.addEventListener('mouseup',async e=>{
+  panDrag=false;
+  if(dragState){
+    const state=dragState;dragState=null;
+    const el=document.querySelector(`[data-pid="${state.id}"]`);
+    if(el)el.setAttribute('class','pc');
+    if(state.moved){
+      lastDragMoved=true;
+      if(!DATA._positions)DATA._positions={};
+      DATA._positions[state.id]=P[state.id];
+      await saveToSupabase();
+      toast('Position saved ✓');
+    }
+  }
+});
+
+async function resetLayout(){
+  delete DATA._positions;
+  renderTree();
+  await saveToSupabase();
+  toast('Layout reset ✓');
+}
+
 // ── Supabase ───────────────────────────────────────────────────────
 async function saveToSupabase(){
   const{error}=await sb.from('family_tree').upsert({id:1,data:DATA,updated_at:new Date().toISOString()});
   if(error)console.error('Save failed:',error);
 }
+
 async function load(){
   const status=document.getElementById('syncStatus');
   try{
     const{data:row,error}=await sb.from('family_tree').select('data').eq('id',1).single();
-    if(row&&!error){
-      DATA=row.data;
-      status.textContent='● Live';status.style.color='var(--ok)';
-    } else {
+    if(row&&!error){DATA=row.data;status.textContent='● Live';status.style.color='var(--ok)';}
+    else{
       status.textContent='⚠ Offline';
       const cached=localStorage.getItem('familyTreeData');
-      if(cached){DATA=JSON.parse(cached);}
-      else{const res=await fetch('family.json?t='+Date.now());DATA=await res.json();}
+      if(cached){DATA=JSON.parse(cached);}else{const res=await fetch('family.json?t='+Date.now());DATA=await res.json();}
     }
     renderTree();
     sb.channel('family_tree_changes').on('postgres_changes',{event:'UPDATE',schema:'public',table:'family_tree'},payload=>{
@@ -318,12 +382,10 @@ let editId=null;
 function getPerson(id){return DATA.people.find(p=>p.id===id);}
 function getPartner(id){for(const[a,b]of DATA.couples){if(a===id)return b;if(b===id)return a;}return null;}
 function getParent(id){for(const f of DATA.families){if(f.children.includes(id))return f.parents[0];}return null;}
-
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2000);}
 
 function openEditModal(id){
-  editId=id;
-  const p=getPerson(id);
+  editId=id;const p=getPerson(id);
   document.getElementById('modalTitle').textContent='Edit: '+p.name;
   document.getElementById('m_name').value=p.name;
   document.getElementById('m_maiden').value=p.maiden||'';
@@ -333,15 +395,13 @@ function openEditModal(id){
   const ci=document.getElementById('m_color'),hint=document.getElementById('m_colorHint');
   if(p.color){ci.value=p.color;ci.dataset.custom='true';hint.textContent='Custom colour: '+p.color;}
   else{ci.value='#888888';ci.dataset.custom='false';hint.textContent='Using generation colour.';}
-  const sp=document.getElementById('m_spouse');
-  sp.innerHTML='<option value="">— none —</option>';
+  const sp=document.getElementById('m_spouse');sp.innerHTML='<option value="">— none —</option>';
   const curSpouse=getPartner(id);
   [...DATA.people].sort((a,b)=>a.name.localeCompare(b.name)).forEach(q=>{
     if(q.id===id)return;
     sp.insertAdjacentHTML('beforeend',`<option value="${q.id}"${curSpouse===q.id?' selected':''}>${q.name}</option>`);
   });
-  const pa=document.getElementById('m_parent');
-  pa.innerHTML='<option value="">— none / root —</option>';
+  const pa=document.getElementById('m_parent');pa.innerHTML='<option value="">— none / root —</option>';
   const curParent=getParent(id);
   [...DATA.people].sort((a,b)=>a.name.localeCompare(b.name)).forEach(q=>{
     if(q.id===id)return;
@@ -359,8 +419,7 @@ function closeModal(){
 }
 
 function clearModalColor(){
-  const ci=document.getElementById('m_color');
-  ci.value='#888888';ci.dataset.custom='false';
+  const ci=document.getElementById('m_color');ci.value='#888888';ci.dataset.custom='false';
   document.getElementById('m_colorHint').textContent='Using generation colour.';
 }
 
@@ -374,11 +433,9 @@ async function saveModal(){
   p.gen=parseInt(document.getElementById('m_gen').value)||0;
   const ci=document.getElementById('m_color');
   if(ci.dataset.custom==='true'){p.color=ci.value;}else{delete p.color;}
-  // Spouse
   const newSpouse=document.getElementById('m_spouse').value?parseInt(document.getElementById('m_spouse').value):null;
   DATA.couples=DATA.couples.filter(c=>!c.includes(editId));
   if(newSpouse){DATA.couples=DATA.couples.filter(c=>!c.includes(newSpouse));DATA.couples.push([editId,newSpouse]);}
-  // Parent
   const newParent=document.getElementById('m_parent').value?parseInt(document.getElementById('m_parent').value):null;
   DATA.families.forEach(f=>{f.children=f.children.filter(c=>c!==editId);});
   DATA.families=DATA.families.filter(f=>f.children.length>0);
@@ -387,20 +444,17 @@ async function saveModal(){
     if(!fam){const pp=getPartner(newParent);fam={parents:pp?[newParent,pp]:[newParent],children:[]};DATA.families.push(fam);}
     fam.children.push(editId);
   }
-  closeModal();renderTree();toast('Saved ✓');
-  await saveToSupabase();
+  closeModal();renderTree();toast('Saved ✓');await saveToSupabase();
 }
 
 async function deleteFromModal(){
   if(editId===null)return;
-  const p=getPerson(editId);
-  if(!confirm('Delete '+p.name+'?'))return;
+  if(!confirm('Delete '+getPerson(editId).name+'?'))return;
   DATA.people=DATA.people.filter(q=>q.id!==editId);
   DATA.couples=DATA.couples.filter(c=>!c.includes(editId));
   DATA.families.forEach(f=>{f.children=f.children.filter(c=>c!==editId);});
   DATA.families=DATA.families.filter(f=>f.children.length>0);
-  closeModal();renderTree();toast('Deleted');
-  await saveToSupabase();
+  closeModal();renderTree();toast('Deleted');await saveToSupabase();
 }
 
 document.getElementById('m_color').addEventListener('input',e=>{
@@ -409,12 +463,10 @@ document.getElementById('m_color').addEventListener('input',e=>{
 });
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
-// Drag to scroll
+// ── Pan to scroll ──────────────────────────────────────────────────
 const wrap=document.getElementById('wrap');
-let drag=false,sx=0,sy=0,sl=0,st=0;
-wrap.addEventListener('mousedown',e=>{drag=true;sx=e.pageX;sy=e.pageY;sl=wrap.scrollLeft;st=wrap.scrollTop;});
-document.addEventListener('mousemove',e=>{if(drag){wrap.scrollLeft=sl-(e.pageX-sx);wrap.scrollTop=st-(e.pageY-sy);}});
-document.addEventListener('mouseup',()=>drag=false);
+let panDrag=false,panSX=0,panSY=0,panSL=0,panST=0;
+wrap.addEventListener('mousedown',e=>{panDrag=true;panSX=e.pageX;panSY=e.pageY;panSL=wrap.scrollLeft;panST=wrap.scrollTop;});
 
 load();
 </script>
