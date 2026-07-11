@@ -220,16 +220,38 @@ function brnch(L,parents,kids){
   const pp=parents.map(id=>P[id]).filter(Boolean);if(!pp.length)return;
   const parentY=pp[0].y;
   const localKids=kids.filter(id=>{const pos=P[id];return pos&&pos.y>parentY&&pos.y<parentY+ROW_H*2.5;});
-  if(!localKids.length)return;
-  const pcx=parents.map(mx).filter(x=>x),ccx=localKids.map(mx).filter(x=>x);
-  if(!pcx.length||!ccx.length)return;
-  const piv=pcx.reduce((a,b)=>a+b,0)/pcx.length;
-  const pbot=parentY+CH,ctop=P[localKids[0]].y,mid=pbot+(ctop-pbot)/2;
-  pcx.forEach(x=>ln(L,x,pbot,x,mid-8));
-  if(pcx.length>1)ln(L,Math.min(...pcx),mid-8,Math.max(...pcx),mid-8);
-  ln(L,piv,mid-8,piv,mid+8);
-  if(ccx.length>1)ln(L,Math.min(...ccx),mid+8,Math.max(...ccx),mid+8);
-  ccx.forEach(x=>ln(L,x,mid+8,x,ctop));
+  const farKids=kids.filter(id=>{const pos=P[id];return pos&&!(pos.y>parentY&&pos.y<parentY+ROW_H*2.5);});
+
+  // Normal solid branch for nearby kids
+  if(localKids.length){
+    const pcx=parents.map(mx).filter(x=>x),ccx=localKids.map(mx).filter(x=>x);
+    if(pcx.length&&ccx.length){
+      const piv=pcx.reduce((a,b)=>a+b,0)/pcx.length;
+      const pbot=parentY+CH,ctop=P[localKids[0]].y,mid=pbot+(ctop-pbot)/2;
+      pcx.forEach(x=>ln(L,x,pbot,x,mid-8));
+      if(pcx.length>1)ln(L,Math.min(...pcx),mid-8,Math.max(...pcx),mid-8);
+      ln(L,piv,mid-8,piv,mid+8);
+      if(ccx.length>1)ln(L,Math.min(...ccx),mid+8,Math.max(...ccx),mid+8);
+      ccx.forEach(x=>ln(L,x,mid+8,x,ctop));
+    }
+  }
+
+  // Dashed line for cross-cluster kids (same person appears in two family branches)
+  if(farKids.length){
+    const pcx=parents.map(mx).filter(x=>x);if(!pcx.length)return;
+    const piv=pcx.reduce((a,b)=>a+b,0)/pcx.length;
+    farKids.forEach(id=>{
+      const kpos=P[id];if(!kpos)return;
+      const kcx=kpos.x+CW/2;
+      const dl=sv('line');
+      dl.setAttribute('x1',piv);dl.setAttribute('y1',parentY+CH);
+      dl.setAttribute('x2',kcx);dl.setAttribute('y2',kpos.y);
+      dl.setAttribute('stroke',dk?'#5a5850':'#C0BAB0');
+      dl.setAttribute('stroke-width','1.5');
+      dl.setAttribute('stroke-dasharray','6,4');
+      L.appendChild(dl);
+    });
+  }
 }
 
 function redrawLines(){
